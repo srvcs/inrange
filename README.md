@@ -1,59 +1,69 @@
 # srvcs-inrange
 
-The range orchestrator of the srvcs.cloud distributed standard library.
+## Name
 
-Its single concern: **range: is value within [lo, hi].** It is a thin
-orchestrator over [`srvcs-between`](https://github.com/srvcs/between): it owns
-the *control flow* but does no comparison of its own. It forwards
-`{"value", "lo", "hi"}` to `srvcs-between` and returns its boolean `result`.
+| Field | Value |
+| --- | --- |
+| Service | `srvcs-inrange` |
+| Slug | `inrange` |
+| Repository | `srvcs/inrange` |
+| Package | `srvcs-inrange` |
+| Kind | `orchestrator` |
 
-```
-inrange(value, lo, hi):
-    return between(value, lo, hi).result
-```
+## Function
 
-The result is a boolean, e.g. `inrange(5, 0, 10) == true` and
-`inrange(15, 0, 10) == false`.
+range: is value within [lo, hi]
 
-Validation is not handled here. This service never calls `srvcs-isnumber`
-directly; instead `srvcs-between` (and its own dependencies) validate the
-operands, and any `422` raised is forwarded verbatim.
+## Dependencies
+
+| Dependency | Repository |
+| --- | --- |
+| `srvcs-between` | [srvcs/between](https://github.com/srvcs/between) |
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Service identity, concern, and dependency list |
-| `POST` | `/` | Decide whether `value` is within `[lo, hi]` |
-| `GET` | `/healthz` `/readyz` `/metrics` `/openapi.json` | srvcs service standard surface |
+| `GET` | `/` | Service identity |
+| `POST` | `/` | Evaluate the service function |
+| `GET` | `/healthz` | Liveness probe |
+| `GET` | `/readyz` | Readiness probe |
+| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/openapi.json` | OpenAPI document |
 
-```sh
-curl -s -X POST localhost:8080/ -H 'content-type: application/json' -d '{"value": 5, "lo": 0, "hi": 10}'
-# {"value":5,"lo":0,"hi":10,"result":true}
-```
+## Inputs
 
-Responses:
+| Name | Type | Required |
+| --- | --- | --- |
+| `value` | `json` | yes |
+| `lo` | `json` | yes |
+| `hi` | `json` | yes |
 
-- `200 {"value": value, "lo": lo, "hi": hi, "result": r}` — evaluated; `result`
-  is a boolean.
-- `422` — `srvcs-between` rejected the input, forwarded verbatim.
-- `500` — a reachable dependency returned a `200` without a usable result.
-- `503` — `srvcs-between` is unavailable.
+## Outputs
 
-## Dependencies
-
-- [`srvcs-between`](https://github.com/srvcs/between)
+| Name | Type |
+| --- | --- |
+| `value` | `json` |
+| `lo` | `json` |
+| `hi` | `json` |
+| `result` | `boolean` |
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SRVCS_BIND_ADDR` | `0.0.0.0:8080` | Bind address |
-| `SRVCS_BETWEEN_URL` | `http://127.0.0.1:8087` | Base URL of `srvcs-between` |
 | `SRVCS_ENV` | `development` | Environment label for logs |
 | `RUST_LOG` | `info,tower_http=info` | Tracing filter |
+| `SRVCS_BETWEEN_URL` | `http://127.0.0.1:8087` | Base URL for srvcs-between |
 
-## Local checks
+## Error Behavior
+
+- `422` means the request could not be evaluated for the documented input shape.
+- `503` means a required dependency was unavailable or returned an unexpected response.
+- Dependency validation errors are forwarded when this service delegates validation.
+
+## Local Checks
 
 ```sh
 cargo fmt --check
@@ -61,11 +71,8 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Orchestration tests stand up a *computing* mock `srvcs-between` service
-in-process — it reads the request body and returns the real
-`lo <= value <= hi`, so the composition is genuinely exercised against the
-asserted cases. See [`srvcs/platform`](https://github.com/srvcs/platform) for the
-shared standard.
+See the [srvcs service standard](https://github.com/srvcs/platform/blob/main/STANDARD.md) for the full operational contract.
 
-> Note: the `cargoHash` in `flake.nix` is inherited from the template and must be
-> refreshed with a `nix build` before the Nix gates pass.
+## Metadata
+
+Machine-readable service metadata lives in `srvcs.yaml`. Keep it aligned with this README when the service contract changes.
